@@ -48,7 +48,7 @@ func (mc *MockCatcher) Attach(fr []*FakeResponse) {
 }
 
 //FindResponse finds suitable response by provided
-func (mc *MockCatcher) FindResponse(query string, args []driver.NamedValue) *FakeResponse {
+func (mc *MockCatcher) FindResponse(query string, args []driver.NamedValue, connstring string) *FakeResponse {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	if mc.Logging {
@@ -56,7 +56,7 @@ func (mc *MockCatcher) FindResponse(query string, args []driver.NamedValue) *Fak
 	}
 
 	for _, resp := range mc.Mocks {
-		if resp.IsMatch(query, args) {
+		if resp.IsMatch(query, args, connstring) {
 			resp.MarkAsTriggered()
 			return resp
 		}
@@ -74,10 +74,14 @@ func (mc *MockCatcher) FindResponse(query string, args []driver.NamedValue) *Fak
 }
 
 //NewMock creates new FakeResponse and return for chains of attachments
-func (mc *MockCatcher) NewMock() *FakeResponse {
+func (mc *MockCatcher) NewMock(connection string) *FakeResponse {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	fr := &FakeResponse{Exceptions: &Exceptions{}, Response: make([]map[string]interface{}, 0)}
+	fr := &FakeResponse{
+		Exceptions: &Exceptions{},
+		Response:   make([]map[string]interface{}, 0),
+		Connection: connection,
+	}
 	mc.Mocks = append(mc.Mocks, fr)
 	return fr
 }
@@ -108,6 +112,7 @@ type FakeResponse struct {
 	LastInsertId int64                             // ID to be returned for INSERT queries
 	Error        error                             // Any type of error which could happen dur
 	mu           sync.Mutex                        // Used to lock concurrent access to variables
+	Connection   string
 	*Exceptions
 }
 
@@ -124,6 +129,13 @@ func (fr *FakeResponse) isArgsMatch(args []driver.NamedValue) bool {
 	return fr.Args == nil || reflect.DeepEqual(fr.Args, arguments)
 }
 
+// Returns true either when nothing to compare or deep equal check passed
+func (fr *FakeResponse) isConnMatch(connstring string) bool {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+	return fr.Connection == connstring
+}
+
 func (fr *FakeResponse) isQueryMatch(query string) bool {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
@@ -131,14 +143,14 @@ func (fr *FakeResponse) isQueryMatch(query string) bool {
 }
 
 // IsMatch checks if both query and args matcher's return true and if this is Once mock
-func (fr *FakeResponse) IsMatch(query string, args []driver.NamedValue) bool {
+func (fr *FakeResponse) IsMatch(query string, args []driver.NamedValue, connstring string) bool {
 	fr.mu.Lock()
 	if fr.Once && fr.Triggered {
 		fr.mu.Unlock()
 		return false
 	}
 	fr.mu.Unlock()
-	return fr.isQueryMatch(query) && fr.isArgsMatch(args)
+	return fr.isQueryMatch(query) && fr.isArgsMatch(args) && fr.isConnMatch(connstring)
 }
 
 //MarkAsTriggered marks response as executed. For one time catches it will not make this possible to execute anymore
