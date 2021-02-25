@@ -60,7 +60,7 @@ func TestResponses(t *testing.T) {
 
 	t.Run("Simple SELECT caught by query", func(t *testing.T) {
 		Catcher.Logging = false
-		Catcher.Reset().NewMock().WithQuery(`SELECT name FROM users WHERE`).WithReply(commonReply)
+		Catcher.Reset().NewMock("connection_string").WithQuery(`SELECT name FROM users WHERE`).WithReply(commonReply)
 		result := GetUsers(DB)
 		if len(result) != 1 {
 			t.Errorf("Returned sets is not equal to 1. Received %d", len(result))
@@ -75,9 +75,10 @@ func TestResponses(t *testing.T) {
 			Catcher.Reset()
 			Catcher.Attach([]*FakeResponse{
 				{
-					Pattern:  "SELECT name FROM users WHERE",
-					Response: commonReply,
-					Once:     false,
+					Pattern:    "SELECT name FROM users WHERE",
+					Response:   commonReply,
+					Once:       false,
+					Connection: "connection_string",
 				},
 			})
 			result := GetUsers(DB)
@@ -93,9 +94,10 @@ func TestResponses(t *testing.T) {
 			Catcher.Reset()
 			Catcher.Attach([]*FakeResponse{
 				{
-					Pattern:  "SELECT name FROM users WHERE",
-					Response: commonReply,
-					Once:     true,
+					Pattern:    "SELECT name FROM users WHERE",
+					Response:   commonReply,
+					Once:       true,
+					Connection: "connection_string",
 				},
 			})
 			GetUsers(DB)           // Trigger once to use this mock
@@ -107,7 +109,7 @@ func TestResponses(t *testing.T) {
 	})
 
 	t.Run("Catch by arguments", func(t *testing.T) {
-		Catcher.Reset().NewMock().WithArgs(int64(27)).WithReply(commonReply)
+		Catcher.Reset().NewMock("connection_string").WithArgs(int64(27)).WithReply(commonReply)
 		result := GetUsers(DB)
 		if len(result) != 1 {
 			t.Fatalf("Returned sets is not equal to 1. Received %d", len(result))
@@ -119,21 +121,21 @@ func TestResponses(t *testing.T) {
 
 	t.Run("Exceptions and Errors", func(t *testing.T) {
 		t.Run("Fire Query error", func(t *testing.T) {
-			Catcher.Reset().NewMock().WithArgs(int64(27)).WithReply(commonReply).WithQueryException()
+			Catcher.Reset().NewMock("connection_string").WithArgs(int64(27)).WithReply(commonReply).WithQueryException()
 			err := GetUsersWithError(DB)
 			if err == nil {
 				t.Fatal("Error not triggered")
 			}
 		})
 		t.Run("Fire Execute error", func(t *testing.T) {
-			Catcher.Reset().NewMock().WithQuery("INSERT INTO users (age)").WithQueryException()
+			Catcher.Reset().NewMock("connection_string").WithQuery("INSERT INTO users (age)").WithQueryException()
 			err := CreateUsersWithError(DB)
 			if err == nil {
 				t.Fatal("Error not triggered")
 			}
 		})
 		t.Run("Fire Execute error", func(t *testing.T) {
-			Catcher.Reset().NewMock().WithQuery("INSERT INTO users (age)").WithError(sql.ErrNoRows)
+			Catcher.Reset().NewMock("connection_string").WithQuery("INSERT INTO users (age)").WithError(sql.ErrNoRows)
 			err := CreateUsersWithError(DB)
 			if err == nil || err != sql.ErrNoRows {
 				t.Fatal("Error not triggered")
@@ -144,7 +146,7 @@ func TestResponses(t *testing.T) {
 	t.Run("Last insert id", func(t *testing.T) {
 		var mockedId int64
 		mockedId = 64
-		Catcher.Reset().NewMock().WithQuery("INSERT INTO foo").WithId(mockedId)
+		Catcher.Reset().NewMock("connection_string").WithQuery("INSERT INTO foo").WithId(mockedId)
 		returnedId := InsertRecord(DB)
 		if returnedId != mockedId {
 			t.Fatalf("Last insert id not returned. Expected: [%v] , Got: [%v]", mockedId, returnedId)
@@ -163,7 +165,7 @@ func TestResponses(t *testing.T) {
 				return name
 			}
 
-			Catcher.Reset().NewMock().WithQuery("SELECT * FROM foo ").WithReply([]map[string]interface{}{{"name": "full_name"}})
+			Catcher.Reset().NewMock("connection_string").WithQuery("SELECT * FROM foo ").WithReply([]map[string]interface{}{{"name": "full_name"}})
 			returnedName := testFunc(DB)
 
 			if returnedName != "full_name" {
